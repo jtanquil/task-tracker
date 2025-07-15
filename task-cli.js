@@ -1,6 +1,6 @@
 "use strict";
 
-const fs = require('fs/promises');
+const fs = require('fs');
 
 const COMMANDS = ["add", "update", "delete", "mark-in-progress", "mark-done", "list"];
 const LIST_FILTERS = ["done", "todo", "in-progress"];
@@ -28,44 +28,91 @@ function createTask(id, taskDescription) {
   }
 }
 
-async function addTask(taskDescription, fileName = FILENAME) {
+function addTask(taskDescription, fileName = FILENAME) {
   try {
-    await fs.access(fileName)
-      .catch(() => {
+    if (!fs.existsSync(fileName)) {
         console.error(`${fileName} doesn't exist, creating ${fileName}`);
         
-        fs.appendFile(fileName, FILE_INIT, { flag : 'w' });
-      });
+        fs.appendFileSync(fileName, FILE_INIT, { flag : 'w' });
+    }
 
-      const data = JSON.parse(await fs.readFile(fileName));
-      data.currentId += 1;
-      data.tasks.push(createTask(data.currentId, taskDescription));
-      await fs.writeFile(fileName, JSON.stringify(data));
-      
-      console.log(`Task added successfully (ID: ${data.currentId})`);
+    const data = JSON.parse(fs.readFileSync(fileName));
+    data.currentId += 1;
+    data.tasks.push(createTask(data.currentId, taskDescription));
+    fs.writeFileSync(fileName, JSON.stringify(data));
+
+    console.log(`Task added successfully (ID: ${data.currentId})`);
   } catch (error) {
     console.error(`Error while opening ${fileName}: ${error}`);
   }
 }
 
-async function updateTask(taskId, taskDescription, fileName = FILENAME) {
+function updateTask(taskId, taskDescription, fileName = FILENAME) {
   try {
-    console.log("test");
+    const data = JSON.parse(fs.readFileSync(fileName));
+    const task = data.tasks.find(task => task.id === Number(taskId));
+
+    if (!task) {
+      throw new Error(`taskId ${taskId} not found`);
+    } else {
+      task.description = taskDescription;
+      task.updatedAt = new Date;
+      fs.writeFileSync(fileName, JSON.stringify(data));
+
+      console.log(`Task successfully updated (ID: ${taskId}, description: ${taskDescription})`);
+    }
   } catch (error) {
     console.error(`Error while opening ${fileName}: ${error}`);
   }
 }
 
-async function listTasks(listFilter, fileName = FILENAME) {
+function deleteTask(taskId, fileName = FILENAME) {
   try {
-    const data = JSON.parse(await fs.readFile(fileName));
+    const data = JSON.parse(fs.readFileSync(fileName));
     
-    for (let i = 0; i < data.tasks.length; i++) {
-      console.log(`id: ${data.tasks[i].id}`);
-      console.log(`description: ${data.tasks[i].description}`);
-      console.log(`status: ${data.tasks[i].status}`);
-      console.log(`createdAt: ${data.tasks[i].createdAt}`);
-      console.log(`updatedAt: ${data.tasks[i].updatedAt}\n`);
+    if (!data.tasks.some(task => task.id == taskId)) {
+      throw new Error(`taskId ${taskId} not found`);
+    } else {
+      data.tasks = data.tasks.filter(task => task.id != taskId);
+      fs.writeFileSync(fileName, JSON.stringify(data));
+
+      console.log(`Task with ID ${taskId} successfully deleted`);
+    }
+  } catch (error) {
+    console.error(`Error while opening ${fileName}: ${error}`);
+  }
+}
+
+function markTask(taskId, taskStatus, fileName = FILENAME) {
+  try {
+    const data = JSON.parse(fs.readFileSync(fileName));
+    const task = data.tasks.find(task => task.id === Number(taskId));
+
+    if (!task) {
+      throw new Error(`taskId ${taskId} not found`);
+    } else {
+      task.status = taskStatus;
+      task.updatedAt = new Date;
+      fs.writeFileSync(fileName, JSON.stringify(data));
+
+      console.log(`Task status successfully updated (ID: ${taskId}, status: ${taskStatus})`);
+    }
+  } catch (error) {
+    console.error(`Error while opening ${fileName}: ${error}`);
+  }
+}
+
+function listTasks(listFilter, fileName = FILENAME) {
+  try {
+    const data = JSON.parse(fs.readFileSync(fileName));
+    const tasks = (listFilter) ? data.tasks.filter(task => task.status === listFilter) : data.tasks;
+    
+    for (let i = 0; i < tasks.length; i++) {
+      console.log(`id: ${tasks[i].id}`);
+      console.log(`description: ${tasks[i].description}`);
+      console.log(`status: ${tasks[i].status}`);
+      console.log(`createdAt: ${tasks[i].createdAt}`);
+      console.log(`updatedAt: ${tasks[i].updatedAt}\n`);
     }
   } catch (error) {
     console.error(`Error while opening ${fileName} : ${error}`);
@@ -75,9 +122,6 @@ async function listTasks(listFilter, fileName = FILENAME) {
 // Parse command line arguments
 const args = process.argv.slice(2);
 
-// Create json if it doesn't exist
-// Open json
-// Write/read as needed
 if (args.length == 0) {
   console.log(HELP_STRING);
 } else {
@@ -91,7 +135,7 @@ if (args.length == 0) {
 
       break;
     case "update":
-      if (args.length < 3 || Number.isNaN(args[1])) {
+      if (args.length < 3) {
         console.log(`Usage: task_cli.js update task_id "task_description"`);
       } else {
         updateTask(args[1], args[2]);
@@ -99,20 +143,37 @@ if (args.length == 0) {
 
       break;
     case "delete":
-      // validate input
-      // if valid, open the file and remove the id
+      if (args.length < 2) {
+        console.log(`Usage: task_cli.js delete task_id`);
+      } else {
+        deleteTask(args[1]);
+      }
+
       break;
     case "mark-in-progress":
-      // validate input
-      // if valid, open the file and modify the id
+      if (args.length < 2) {
+        console.log(`Usage: task_cli.js mark-in-progress task_id`);
+      } else {
+        markTask(args[1], 'in-progress');
+      }
+
       break;
     case "mark-done":
-      // validate input
-      // if valid, open the file and modify the id
+      if (args.length < 2) {
+        console.log(`Usage: task_cli.js mark-done task_id`);
+      } else {
+        markTask(args[1], 'done');
+      }
+
       break;
     case "list":
       const listFilter = (args.length == 1) ? "" : args[1];
-      listTasks(listFilter);
+
+      if (args.length > 1 && !LIST_FILTERS.some(filter => filter === listFilter)) {
+        console.log(`Usage: task-cli.js list [done/todo/in-progress]`);
+      } else {
+        listTasks(listFilter);
+      }
 
       break;
     default:
