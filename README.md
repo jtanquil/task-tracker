@@ -1,6 +1,6 @@
 ### Task Tracker
 
-Task Tracker project for [roadmap.sh Backend Roadmap](https://roadmap.sh/backend).
+Repo for [Task Tracker project](https://roadmap.sh/projects/task-tracker) from the [roadmap.sh Backend Roadmap](https://roadmap.sh/backend).
 
 Usage:
 
